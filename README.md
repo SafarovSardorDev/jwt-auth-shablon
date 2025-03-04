@@ -16,7 +16,7 @@ This project implements JWT authentication using Django Rest Framework (DRF) and
 ### 1️⃣ Clone the Repository
 ```bash
 git clone https://github.com/SafarovSardorDev/jwt-auth-shablon.git
-cd jwt-auth
+cd jwt-auth-shablon
 ```
 
 ### 2️⃣ Create & Activate Virtual Environment
