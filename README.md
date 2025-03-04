@@ -15,7 +15,7 @@ This project implements JWT authentication using Django Rest Framework (DRF) and
 
 ### 1️⃣ Clone the Repository
 ```bash
-git clone https://github.com/yourusername/jwt-auth.git
+git clone https://github.com/SafarovSardorDev/jwt-auth-shablon.git
 cd jwt-auth
 ```
 
@@ -122,7 +122,6 @@ Authorization: Bearer JWT_ACCESS_TOKEN
 - **Python** & **Django**
 - **Django Rest Framework (DRF)**
 - **Simple JWT**
-- **Google OAuth2**
 
 ---
 
