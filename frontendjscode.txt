@@ -1,0 +1,103 @@
+// script.js - API bilan ishlash uchun
+document.addEventListener('DOMContentLoaded', function() {
+  const API_BASE_URL = 'http://sizning-domen.uz/api';
+  let bins = [];
+  let lastFilledBins = [];
+
+  // Ma'lumotlarni serverdан olish
+  async function fetchAllData() {
+    try {
+      // Statistika olish
+      const statsResponse = await fetch(`${API_BASE_URL}/statistics/`);
+      const statsData = await statsResponse.json();
+      updateStatsDisplay(statsData);
+      
+      // Barcha idishlar haqida ma'lumot olish
+      const binsResponse = await fetch(`${API_BASE_URL}/bins/`);
+      bins = await binsResponse.json();
+      
+      // Jadvalni yangilash
+      updateTable(bins);
+      checkForUpdates();
+      
+    } catch (error) {
+      console.error('Ma\'lumotlarni olishda xatolik:', error);
+      showToast('Serverga ulanishda xatolik yuz berdi.');
+    }
+  }
+  
+  // Statistika ko'rsatkichlarini yangilash
+  function updateStatsDisplay(statsData) {
+    document.getElementById('total-bins').textContent = statsData.total_bins;
+    document.getElementById('filled-bins').textContent = statsData.filled_bins;
+    
+    // Oxirgi yangilanish vaqtini ko'rsatish (ixtiyoriy)
+    const lastUpdated = new Date(statsData.last_updated);
+    const timeString = lastUpdated.toLocaleTimeString();
+    console.log(`Oxirgi yangilanish: ${timeString}`);
+  }
+
+  // Jadvalni yangilash
+  function updateTable(data) {
+    const tbody = document.getElementById('bins-body');
+    tbody.innerHTML = '';
+    
+    data.forEach(bin => {
+      const row = document.createElement('tr');
+      row.className = 'table-row table-flash';
+      row.innerHTML = `
+        <td class="border p-3 text-gray-800">${bin.bin_id}</td>
+        <td class="border p-3 text-gray-800">${bin.sensor_id}</td>
+        <td class="border p-3 text-gray-800">${bin.neighborhood}</td>
+        <td class="border p-3 text-gray-800">${bin.address}</td>
+        <td class="border p-3 font-semibold">
+          <span class="inline-block w-5 h-5 rounded-full status-${bin.status.replace("'", "-")} mr-2"></span>
+          ${bin.status === "to'lgan" ? "To'lgan" : "To'lmagan"}
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  // Barcha idishlarni ko'rsatish
+  window.showAllBins = function() {
+    updateTable(bins);
+  };
+
+  // To'lgan idishlarni ko'rsatish
+  window.showFilledBins = function() {
+    const filledBins = bins.filter(bin => bin.status === "to'lgan");
+    updateTable(filledBins);
+  };
+
+  // Bildirishnoma ko'rsatish  
+  function showToast(message) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-message').textContent = message;
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    setTimeout(() => toast.style.display = 'none', 4000);
+  }
+
+  // Yangi to'lgan idishlarni aniqlash
+  function checkForUpdates() {
+    const filledBins = bins.filter(bin => bin.status === "to'lgan");
+    
+    filledBins.forEach(bin => {
+      if (!lastFilledBins.includes(bin.bin_id)) {
+        showToast(`Idish #${bin.bin_id} to'ldi: ${bin.address}`);
+      }
+    });
+    
+    lastFilledBins = filledBins.map(bin => bin.bin_id);
+  }
+
+  // Ma'lumotlarni avtomatik yangilash (har 30 soniyada)
+  function setupAutoRefresh() {
+    setInterval(fetchAllData, 30000);  // 30 soniya
+  }
+
+  // Dastlabki yuklash
+  fetchAllData();
+  setupAutoRefresh();
+});

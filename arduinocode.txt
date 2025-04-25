@@ -1,0 +1,169 @@
+// Arduino kod misolini kengaytirish: GSM modul va API bilan aloqa
+#include <SoftwareSerial.h>
+#include <ArduinoHttpClient.h>
+
+#define BUTTON_PIN 2
+#define RELAY_PIN 3
+#define GSM_RX 7
+#define GSM_TX 8
+
+SoftwareSerial gsm(GSM_RX, GSM_TX);
+
+// Parametrlar
+bool lastButtonState = HIGH;
+bool currentButtonState;
+unsigned long buttonPressTime = 0;
+bool messageSent = false;
+String phoneNumber = "+998933977991";
+String staticLocation = "Manzil: Yunusobod tumani, Osiyo ko'chasi, 30-uy yonida";
+
+// API konfiguratsiylari
+const char server[] = "sizning-domen.uz";  // Sizning serveringiz
+const int port = 80;                        // HTTP porti
+const String apiKey = "sizning-api-kalitingiz";
+const String sensorId = "sensor_yunusobod_1";
+
+// HTTP mijozi
+HttpClient client = HttpClient(gsm, server, port);
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);
+  
+  Serial.begin(9600);
+  gsm.begin(9600);
+  delay(1000);
+  
+  // GSM initializatsiya
+  sendAT("AT");
+  sendAT("AT+CMGF=1");  // SMS text rejimi
+  
+  // GPRS initializatsiya
+  Serial.println("GPRS ulanmoqda...");
+  sendAT("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");
+  sendAT("AT+SAPBR=3,1,\"APN\",\"internet\"");  // Provayderingiz APN
+  sendAT("AT+SAPBR=1,1");
+  delay(2000);
+  sendAT("AT+SAPBR=2,1");  // IP manzilni tekshirish
+}
+
+void loop() {
+  currentButtonState = digitalRead(BUTTON_PIN);
+  
+  if (currentButtonState == LOW && lastButtonState == HIGH) {
+    // Tugma yangi bosildi
+    buttonPressTime = millis();
+    messageSent = false;
+  }
+  
+  if (currentButtonState == LOW && !messageSent) {
+    if (millis() - buttonPressTime >= 3000) {  // 3 soniyadan oshdi
+      digitalWrite(RELAY_PIN, HIGH);
+      
+      // SMS yuborish
+      sendSMS("Diqqat! Chiqindi idishi to'ldi. Uni bo'shatish zarur!!!\n" + staticLocation);
+      Serial.println("SMS yuborildi: TO'LDI");
+      
+      // API ga ma'lumot yuborish
+      sendToAPI("to'lgan");
+      
+      messageSent = true;
+    }
+  }
+  
+  if (currentButtonState == HIGH && lastButtonState == LOW) {
+    // Tugma qo'yib yuborildi
+    digitalWrite(RELAY_PIN, LOW);
+    
+    if (messageSent) {
+      // SMS yuborish
+      sendSMS("Axlat qutisi bo'shatildi.\n" + staticLocation);
+      Serial.println("SMS yuborildi: BO'SH");
+      
+      // API ga ma'lumot yuborish
+      sendToAPI("to'lmagan");
+    }
+  }
+  
+  lastButtonState = currentButtonState;
+}
+
+// API ga ma'lumot yuborish
+void sendToAPI(String status) {
+  Serial.println("API ga ma'lumot yuborilmoqda...");
+  
+  String contentType = "application/x-www-form-urlencoded";
+  String postData = "sensor_id=" + sensorId + 
+                   "&status=" + status + 
+                   "&api_key=" + apiKey +
+                   "&location=" + urlEncode(staticLocation);
+  
+  client.beginRequest();
+  client.post("/api/bin-status-update/");
+  client.sendHeader("Content-Type", contentType);
+  client.sendHeader("Content-Length", postData.length());
+  client.beginBody();
+  client.print(postData);
+  client.endRequest();
+  
+  // Javobni kutish
+  int statusCode = client.responseStatusCode();
+  String response = client.responseBody();
+  
+  Serial.print("API statusCode: ");
+  Serial.println(statusCode);
+  Serial.print("API javob: ");
+  Serial.println(response);
+}
+
+// GSM AT komandasi
+void sendAT(String command) {
+  gsm.println(command);
+  delay(100);
+  while (gsm.available()) {
+    Serial.write(gsm.read());
+  }
+}
+
+// SMS yuborish
+void sendSMS(String text) {
+  gsm.println("AT+CMGS=\"" + phoneNumber + "\"");
+  delay(10);
+  gsm.print(text);
+  gsm.write(26);
+  delay(1000);
+}
+
+// URL kodlash (bo'shliqlar va maxsus belgilarni almashtirish)
+String urlEncode(String str) {
+  String encodedString = "";
+  char c;
+  char code0;
+  char code1;
+  
+  for (int i = 0; i < str.length(); i++) {
+    c = str.charAt(i);
+    
+    if (c == ' ') {
+      encodedString += '+';
+    } else if (isAlphaNumeric(c)) {
+      encodedString += c;
+    } else {
+      code1 = (c & 0xf) + '0';
+      if ((c & 0xf) > 9) {
+        code1 = (c & 0xf) - 10 + 'A';
+      }
+      c = (c >> 4) & 0xf;
+      code0 = c + '0';
+      if (c > 9) {
+        code0 = c - 10 + 'A';
+      }
+      encodedString += '%';
+      encodedString += code0;
+      encodedString += code1;
+    }
+  }
+  
+  return encodedString;
+}
